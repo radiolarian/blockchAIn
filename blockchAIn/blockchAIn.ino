@@ -137,12 +137,7 @@ void backwardMotors() {
     analogWrite(LMOT_OUT2, 0);
     analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
     analogWrite(RMOT_OUT2, 0);
-
-//    analogWrite(LMOT_OUT1, 0);
-//    analogWrite(LMOT_OUT2, -1*LEFT_MOTOR_SPEED_ON);
-//    analogWrite(RMOT_OUT1, 0);
-//    analogWrite(RMOT_OUT2, -1*RIGHT_MOTOR_SPEED_ON);
-  }
+}
   
 void stopMotors() {
     analogWrite(LMOT_OUT1, 0);
@@ -152,27 +147,33 @@ void stopMotors() {
   } 
 
 void turnRightMotors() {
-  //todo...
+    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
+    analogWrite(LMOT_OUT2, 0);
+    analogWrite(RMOT_OUT1, 0);
+    analogWrite(RMOT_OUT2, RIGHT_MOTOR_SPEED_ON);
+    delay(1480);
+    stopMotors();
+    //todo replace with forwardMotor() when done
   }
 
 //for debugging...
 void respToKey() {
   int key = Serial.read();
-  Serial.println(key);
     switch (key) { 
     case 'f':
       Serial.println("forward");
       forwardMotors();
       break;
     case 'b':
-        Serial.println("b");
+      Serial.println("back");
       backwardMotors();
       break;
     case 's':
-          Serial.println("s");
+      Serial.println("stop");
       stopMotors();
       break;
     case 'r':
+      Serial.println("turn");
       turnRightMotors();
       break;
     }
