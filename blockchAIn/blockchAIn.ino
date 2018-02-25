@@ -11,9 +11,9 @@
  ************************************************************/
 
 // TAPE SENSOR CONSTANTS
-//#define BLACK_THRES    10 //unused because we're defining minimums
-#define  GREY_THRES   25
-#define  WHITE_THRES  90
+//#define BLACK_THRES  0 //unused because we're defining minimums
+#define  GREY_THRES   10
+#define  WHITE_THRES  40
 
 // MOTOR CONSTANTS
 #define  LEFT_MOTOR_SPEED_ON  60
@@ -51,8 +51,14 @@ Linecolor front_left;
 Linecolor front_right;
 Linecolor side;
 
+//BUZZWORD FLAGS
+bool ROUND_A_DONE = false;
+
 //DEBUG FLAGS
 bool DEBUG_TAPE_SENSOR = false;
+bool DEBUG_TAPE = true;
+bool DEBUG_STATE = true;
+
 
 void setup() {
   Serial.begin(9600);
@@ -65,21 +71,70 @@ void setup() {
 }
 
 void loop() {
+  
+ 
+  readTape();
+  
   switch (state) { 
     case STATE_WAITING:
+      //action
+        stopMotors();
+      //transition
+      if (front_middle == LINE_BLACK) {
+        state = STATE_MOVING;
+        }
       break;
     case STATE_MOVING:
+      //action
+        forwardMotors();
+      //transition
+      if (side == LINE_GREY && !ROUND_A_DONE) {
+        state = STATE_BUZZWORD_A;
+      } else if (side == LINE_GREY && ROUND_A_DONE) {
+        state = STATE_BUZZWORD_B;
+      } else if (front_right == LINE_BLACK && front_middle == LINE_BLACK && front_left == LINE_WHITE) {
+        state = STATE_TURNING;  
+      }
       break;
     case STATE_TURNING:
+      //action
+        turnRightMotors();
+      //transition
+      // lol none it means we won!
       break;
     case STATE_BUZZWORD_A:
+      //action
+      stopMotors();
+      //release servo
+      delay(1000);
+      ROUND_A_DONE = true;
+      //transition
+      state = STATE_MOVING;
       break;
     case STATE_BUZZWORD_B:
+      //action
+      stopMotors();
+      //release servo
+      delay(1000);
+      //transition
+      state = STATE_MOVING;
       break;
     }
-  
-  readTape();
-
+    
+  if (DEBUG_STATE) {
+    Serial.print("state: ");
+    Serial.println(state);
+  } if (DEBUG_TAPE) {
+    Serial.print("Front: ");
+    Serial.println(front_middle);
+    Serial.print("Left: ");
+    Serial.println(front_left);
+    Serial.print("Right: ");
+    Serial.println(front_right);
+    Serial.print("Side: ");
+    Serial.println(side);
+    delay(500);
+    }
   if (Serial.available()) respToKey();
 }
 
@@ -101,28 +156,39 @@ void readTape() {
     Serial.println(sVal);
     delay(500);
   } 
+  if (fmVal > front_max) front_max = fmVal;
+  if (flVal > left_max) left_max = flVal;
+  if (frVal > right_max) right_max = frVal;
+  if (sVal > side_max) side_max = sVal;
   
-  updateTapeValues(fmVal, front_middle);
-  updateTapeValues(flVal, front_left);
-  updateTapeValues(frVal, front_right);
-  updateTapeValues(sVal, side);
+  front_middle = updateTapeValues(fmVal, front_max, "front");
+  front_left = updateTapeValues(flVal, left_max, "left");
+  front_right = updateTapeValues(frVal, right_max, "right");
+  side = updateTapeValues(sVal, side_max, "side");
 }
 
-void updateMaxTape(int val, int tape_max) {
-  if (val > tape_max) {
-    tape_max = val;
-    }
+
+Linecolor updateTapeValues(int val, int maxVal, String which) { 
+  //updates the Linecolor variables accordingly
+  int percent = val * 100 / maxVal;
+
+    
+  if (DEBUG_TAPE_SENSOR) { 
+    Serial.print(which);
+    Serial.print(" val: ");
+    Serial.print(val);
+    Serial.print(", percent : ");
+    Serial.println(percent);
+  } 
+  
+  if (percent >= WHITE_THRES ) { 
+    return LINE_WHITE;
+  } else if (percent >= GREY_THRES) { 
+    return LINE_GREY;
+  } else { 
+    return LINE_BLACK;
   }
 
-void updateTapeValues(int val, Linecolor lc) { 
-  //updates the Linecolor variables accordingly
-  if (val >= WHITE_THRES) { 
-    lc = LINE_WHITE;
-  } else if (val >= GREY_THRES) { 
-    lc = LINE_GREY;
-  } else { 
-    lc = LINE_BLACK;
-  }
 }
 
 void forwardMotors() {   
@@ -152,8 +218,7 @@ void turnRightMotors() {
     analogWrite(RMOT_OUT1, 0);
     analogWrite(RMOT_OUT2, RIGHT_MOTOR_SPEED_ON);
     delay(1480);
-    stopMotors();
-    //todo replace with forwardMotor() when done
+    forwardMotors();
   }
 
 //for debugging...
