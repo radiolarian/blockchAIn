@@ -1,3 +1,4 @@
+#include <Servo.h>
 
 /*************************************************************
   File:      blockchAIn.ino
@@ -7,13 +8,17 @@
   when     who  what/why
   ----     ---  ---------------------------------------------
   2/22     JL   tape sensor code
-  2/25     JL   integrate kyles motor code
+  2/25     JL   integrate kyles motor, servo code, add fsm
  ************************************************************/
 
 // TAPE SENSOR CONSTANTS
 //#define BLACK_THRES  0 //unused because we're defining minimums
 #define  GREY_THRES   10
 #define  WHITE_THRES  40
+
+//SERVO CONSTANTS
+#define LSERVO        9
+#define RSERVO        10
 
 // MOTOR CONSTANTS
 #define  LEFT_MOTOR_SPEED_ON  60
@@ -35,6 +40,8 @@ int LMOT_OUT1 = A9; // Arduino PWM output pin A6; connect to IBT-2 pin 1 (RPWM)
 int LMOT_OUT2 = A8; // Arduino PWM output pin A5; connect to IBT-2 pin 2 (LPWM)
 int RMOT_OUT1 = A7;
 int RMOT_OUT2 = A6;
+Servo leftServo;
+Servo rightServo;
 
 //state definitions
 typedef enum { 
@@ -68,6 +75,11 @@ void setup() {
   pinMode(LMOT_OUT2, OUTPUT);
   pinMode(RMOT_OUT1, OUTPUT);
   pinMode(RMOT_OUT2, OUTPUT);
+  
+  leftServo.attach(LSERVO);
+  rightServo.attach(RSERVO);
+  leftServo.write(0);
+  rightServo.write(0);
 }
 
 void loop() {
@@ -106,7 +118,7 @@ void loop() {
       //action
       stopMotors();
       //release servo
-      delay(1000);
+      openLeftServo();
       ROUND_A_DONE = true;
       //transition
       state = STATE_MOVING;
@@ -115,7 +127,7 @@ void loop() {
       //action
       stopMotors();
       //release servo
-      delay(1000);
+      openRightServo();
       //transition
       state = STATE_MOVING;
       break;
@@ -220,6 +232,17 @@ void turnRightMotors() {
     delay(1480);
     forwardMotors();
   }
+
+void openLeftServo(){
+  leftServo.write(90);
+  delay(2000);
+  leftServo.write(0);
+}
+void openRightServo(){
+  rightServo.write(90);
+  delay(2000);
+  rightServo.write(0);
+}
 
 //for debugging...
 void respToKey() {
