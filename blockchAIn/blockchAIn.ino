@@ -7,6 +7,7 @@
   when     who  what/why
   ----     ---  ---------------------------------------------
   2/22     JL   tape sensor code
+  2/25     JL   integrate kyles motor code
  ************************************************************/
 
 // TAPE SENSOR CONSTANTS
@@ -14,11 +15,26 @@
 #define  GREY_THRES   25
 #define  WHITE_THRES  90
 
+// MOTOR CONSTANTS
+#define  LEFT_MOTOR_SPEED_ON  60
+#define  RIGHT_MOTOR_SPEED_ON 70
+
+
+int front_max = 100;
+int left_max = 100;
+int right_max = 100;
+int side_max = 80; //this one is lower than the rest for some reason
+
 // PIN CONFIG
 int TAPE_READ_FRONT_MIDDLE_PIN = A0;
 int TAPE_READ_FRONT_LEFT_PIN = A1;
 int TAPE_READ_FRONT_RIGHT_PIN = A2;
 int TAPE_READ_SIDE_PIN = A3;
+
+int LMOT_OUT1 = A9; // Arduino PWM output pin A6; connect to IBT-2 pin 1 (RPWM)
+int LMOT_OUT2 = A8; // Arduino PWM output pin A5; connect to IBT-2 pin 2 (LPWM)
+int RMOT_OUT1 = A7;
+int RMOT_OUT2 = A6;
 
 //state definitions
 typedef enum { 
@@ -36,11 +52,16 @@ Linecolor front_right;
 Linecolor side;
 
 //DEBUG FLAGS
-bool DEBUG_TAPE_SENSOR = true;
+bool DEBUG_TAPE_SENSOR = false;
 
 void setup() {
   Serial.begin(9600);
   state = STATE_WAITING;
+  
+  pinMode(LMOT_OUT1, OUTPUT);
+  pinMode(LMOT_OUT2, OUTPUT);
+  pinMode(RMOT_OUT1, OUTPUT);
+  pinMode(RMOT_OUT2, OUTPUT);
 }
 
 void loop() {
@@ -58,6 +79,8 @@ void loop() {
     }
   
   readTape();
+
+  if (Serial.available()) respToKey();
 }
 
 void readTape() { 
@@ -76,7 +99,7 @@ void readTape() {
     Serial.println(frVal);
     Serial.print("Side value: ");
     Serial.println(sVal);
-    delay(1000);
+    delay(500);
   } 
   
   updateTapeValues(fmVal, front_middle);
@@ -84,6 +107,12 @@ void readTape() {
   updateTapeValues(frVal, front_right);
   updateTapeValues(sVal, side);
 }
+
+void updateMaxTape(int val, int tape_max) {
+  if (val > tape_max) {
+    tape_max = val;
+    }
+  }
 
 void updateTapeValues(int val, Linecolor lc) { 
   //updates the Linecolor variables accordingly
@@ -94,4 +123,57 @@ void updateTapeValues(int val, Linecolor lc) {
   } else { 
     lc = LINE_BLACK;
   }
+}
+
+void forwardMotors() {   
+    analogWrite(LMOT_OUT1, 0);
+    analogWrite(LMOT_OUT2, LEFT_MOTOR_SPEED_ON);
+    analogWrite(RMOT_OUT1, 0);
+    analogWrite(RMOT_OUT2, RIGHT_MOTOR_SPEED_ON);
+  }
+
+void backwardMotors() { 
+    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
+    analogWrite(LMOT_OUT2, 0);
+    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
+    analogWrite(RMOT_OUT2, 0);
+
+//    analogWrite(LMOT_OUT1, 0);
+//    analogWrite(LMOT_OUT2, -1*LEFT_MOTOR_SPEED_ON);
+//    analogWrite(RMOT_OUT1, 0);
+//    analogWrite(RMOT_OUT2, -1*RIGHT_MOTOR_SPEED_ON);
+  }
+  
+void stopMotors() {
+    analogWrite(LMOT_OUT1, 0);
+    analogWrite(LMOT_OUT2, 0);
+    analogWrite(RMOT_OUT1, 0);
+    analogWrite(RMOT_OUT2, 0);
+  } 
+
+void turnRightMotors() {
+  //todo...
+  }
+
+//for debugging...
+void respToKey() {
+  int key = Serial.read();
+  Serial.println(key);
+    switch (key) { 
+    case 'f':
+      Serial.println("forward");
+      forwardMotors();
+      break;
+    case 'b':
+        Serial.println("b");
+      backwardMotors();
+      break;
+    case 's':
+          Serial.println("s");
+      stopMotors();
+      break;
+    case 'r':
+      turnRightMotors();
+      break;
+    }
 }
