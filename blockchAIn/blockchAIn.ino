@@ -20,9 +20,15 @@
 #define LSERVO        9
 #define RSERVO        10
 
+#define L_CLOSED      90
+#define L_OPEN        180
+#define R_CLOSED      180
+#define R_OPEN        0
+
+
 // MOTOR CONSTANTS
-#define  LEFT_MOTOR_SPEED_ON  60
-#define  RIGHT_MOTOR_SPEED_ON 70
+#define  RIGHT_MOTOR_SPEED_ON  61
+#define  LEFT_MOTOR_SPEED_ON 60
 
 
 int front_max = 100;
@@ -43,9 +49,13 @@ int RMOT_OUT2 = A6;
 Servo leftServo;
 Servo rightServo;
 
+IntervalTimer leftServoTimer;
+IntervalTimer rightServoTimer;
+IntervalTimer backToMovingTimer;
+
 //state definitions
 typedef enum { 
-  STATE_WAITING, STATE_MOVING, STATE_TURNING, STATE_BUZZWORD_A, STATE_BUZZWORD_B
+  STATE_WAITING, STATE_MOVING, STATE_TURNING, STATE_BUZZWORD_A, STATE_BUZZWORD_B, STATE_BUZZWORD_WAITING
 } States_t;
 States_t state;
 
@@ -60,11 +70,12 @@ Linecolor side;
 
 //BUZZWORD FLAGS
 bool ROUND_A_DONE = false;
-
+bool DONE_B_WAITING = false;
 //DEBUG FLAGS
 bool DEBUG_TAPE_SENSOR = false;
-bool DEBUG_TAPE = true;
-bool DEBUG_STATE = true;
+bool DEBUG_TAPE = false;
+bool DEBUG_STATE = false;
+bool USE_STATES = false;
 
 
 void setup() {
@@ -78,41 +89,63 @@ void setup() {
   
   leftServo.attach(LSERVO);
   rightServo.attach(RSERVO);
-  leftServo.write(0);
-  rightServo.write(0);
+  leftServo.write(L_CLOSED);
+  rightServo.write(R_CLOSED);
 }
 
 void loop() {
   
  
   readTape();
-  
-  switch (state) { 
+  if (USE_STATES) {
+      switch (state) { 
     case STATE_WAITING:
       //action
         stopMotors();
       //transition
       if (front_middle == LINE_BLACK) {
+        //Serial.println("TRANSITION: MOVING");
         state = STATE_MOVING;
         }
       break;
     case STATE_MOVING:
-      //action
+      //adjustment actions
+      if (front_left == LINE_WHITE && front_right == LINE_WHITE) { 
+        Serial.println("Straight");
         forwardMotors();
+      }
+      else if (front_left == LINE_BLACK || front_left == LINE_GREY) {
+        Serial.println("Adjusting Left");
+        adjustLeft();
+        }
+      else if (front_right == LINE_BLACK  || front_right == LINE_GREY) {
+        Serial.println("Adjusting Right");
+        adjustRight();        
+        } else { 
+          Serial.println("sadness");
+          }
+
       //transition
       if (side == LINE_GREY && !ROUND_A_DONE) {
+        //Serial.println("TRANSITION: BUZZWORD A");
         state = STATE_BUZZWORD_A;
       } else if (side == LINE_GREY && ROUND_A_DONE) {
+        //Serial.println("TRANSITION: BUZZWORD B");
         state = STATE_BUZZWORD_B;
-      } else if (front_right == LINE_BLACK && front_middle == LINE_BLACK && front_left == LINE_WHITE) {
+      } else if (side == LINE_BLACK && front_middle == LINE_BLACK) {
+        //Serial.println("TRANSITION: TURNING");
         state = STATE_TURNING;  
       }
       break;
+    case STATE_BUZZWORD_WAITING:
+        if (DONE_B_WAITING) state = STATE_MOVING;
+        break;
     case STATE_TURNING:
       //action
         turnRightMotors();
       //transition
-      // lol none it means we won!
+      ROUND_A_DONE = false;
+      state = STATE_WAITING;
       break;
     case STATE_BUZZWORD_A:
       //action
@@ -121,7 +154,8 @@ void loop() {
       openLeftServo();
       ROUND_A_DONE = true;
       //transition
-      state = STATE_MOVING;
+      backToMovingTimer.begin(moving, 1000000);
+      state = STATE_BUZZWORD_WAITING;
       break;
     case STATE_BUZZWORD_B:
       //action
@@ -129,14 +163,18 @@ void loop() {
       //release servo
       openRightServo();
       //transition
-      state = STATE_MOVING;
+      backToMovingTimer.begin(moving, 1000000);
+      state = STATE_BUZZWORD_WAITING;
       break;
     }
     
   if (DEBUG_STATE) {
     Serial.print("state: ");
     Serial.println(state);
-  } if (DEBUG_TAPE) {
+  } 
+  
+  }
+  if (DEBUG_TAPE) {
     Serial.print("Front: ");
     Serial.println(front_middle);
     Serial.print("Left: ");
@@ -203,14 +241,28 @@ Linecolor updateTapeValues(int val, int maxVal, String which) {
 
 }
 
-void forwardMotors() {   
+void backwardMotors() {   
     analogWrite(LMOT_OUT1, 0);
     analogWrite(LMOT_OUT2, LEFT_MOTOR_SPEED_ON);
     analogWrite(RMOT_OUT1, 0);
     analogWrite(RMOT_OUT2, RIGHT_MOTOR_SPEED_ON);
-  }
+}
 
-void backwardMotors() { 
+void adjustLeft() {   
+    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON+10);
+    analogWrite(LMOT_OUT2, 0);
+    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
+    analogWrite(RMOT_OUT2, 0);
+}
+
+void adjustRight() {   
+    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
+    analogWrite(LMOT_OUT2, 0);
+    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON+10);
+    analogWrite(RMOT_OUT2, 0);
+}
+
+void forwardMotors() { 
     analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
     analogWrite(LMOT_OUT2, 0);
     analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
@@ -225,23 +277,43 @@ void stopMotors() {
   } 
 
 void turnRightMotors() {
-    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
-    analogWrite(LMOT_OUT2, 0);
-    analogWrite(RMOT_OUT1, 0);
-    analogWrite(RMOT_OUT2, RIGHT_MOTOR_SPEED_ON);
+    analogWrite(LMOT_OUT1, 0);
+    analogWrite(LMOT_OUT2, LEFT_MOTOR_SPEED_ON);
+    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
+    analogWrite(RMOT_OUT2, 0);
     delay(1480);
     forwardMotors();
+    delay(5000);
+    stopMotors();
   }
 
 void openLeftServo(){
-  leftServo.write(90);
-  delay(2000);
-  leftServo.write(0);
+  leftServo.write(L_OPEN);
+//  Serial.println("open left");
+  leftServoTimer.begin(closeLeft, 2000000);
 }
 void openRightServo(){
-  rightServo.write(90);
-  delay(2000);
-  rightServo.write(0);
+  rightServo.write(R_OPEN);
+//    Serial.println("open right");
+  rightServoTimer.begin(closeRight, 2000000);
+}
+
+void closeLeft() {
+  Serial.println("closing left");
+  leftServo.write(L_CLOSED);
+  leftServoTimer.end();
+}
+
+void closeRight() {
+  Serial.println("closing right");
+  rightServo.write(R_CLOSED);
+  rightServoTimer.end();
+}
+
+void moving() {
+  DONE_B_WAITING = true;
+  Serial.println("DONE WAITING!");
+  backToMovingTimer.end();
 }
 
 //for debugging...
@@ -263,6 +335,22 @@ void respToKey() {
     case 'r':
       Serial.println("turn");
       turnRightMotors();
+      break;
+    case 'q': 
+      Serial.println("left servo");
+      openLeftServo();
+      break;
+    case 'w': 
+      Serial.println("right servo");
+      openRightServo();
+      break;
+    case '[': 
+      Serial.println("adjust left");
+      adjustLeft();
+      break;
+    case ']': 
+      Serial.println("adjust right");
+      adjustRight();
       break;
     }
 }
