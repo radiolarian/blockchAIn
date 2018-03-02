@@ -27,8 +27,8 @@
 
 
 // MOTOR CONSTANTS
-#define  RIGHT_MOTOR_SPEED_ON  61
-#define  LEFT_MOTOR_SPEED_ON 60
+#define  LEFT_MOTOR_SPEED_ON  60
+#define  RIGHT_MOTOR_SPEED_ON 64
 
 
 int front_max = 100;
@@ -71,6 +71,7 @@ Linecolor side;
 //BUZZWORD FLAGS
 bool ROUND_A_DONE = false;
 bool DONE_B_WAITING = false;
+bool PATENT_OFFICE = false;
 //DEBUG FLAGS
 bool DEBUG_TAPE_SENSOR = false;
 bool DEBUG_TAPE = false;
@@ -127,9 +128,17 @@ void loop() {
 
       //transition
       if (side == LINE_GREY && !ROUND_A_DONE) {
-        //Serial.println("TRANSITION: BUZZWORD A");
+          //action
+        stopMotors();
+        //release servo
+        openLeftServo();
+        Serial.println("TRANSITION: BUZZWORD A");
+        backToMovingTimer.begin(moving, 1000000);
+        
         state = STATE_BUZZWORD_A;
-      } else if (side == LINE_GREY && ROUND_A_DONE) {
+      } else if (side == LINE_GREY && ROUND_A_DONE && !PATENT_OFFICE) {
+        //keep moving
+        
         //Serial.println("TRANSITION: BUZZWORD B");
         state = STATE_BUZZWORD_B;
       } else if (side == LINE_BLACK && front_middle == LINE_BLACK) {
@@ -148,14 +157,9 @@ void loop() {
       state = STATE_WAITING;
       break;
     case STATE_BUZZWORD_A:
-      //action
-      stopMotors();
-      //release servo
-      openLeftServo();
-      ROUND_A_DONE = true;
-      //transition
-      backToMovingTimer.begin(moving, 1000000);
-      state = STATE_BUZZWORD_WAITING;
+      Serial.println("waiting A...")
+      break;
+    case PATENT_OFFICE:
       break;
     case STATE_BUZZWORD_B:
       //action
@@ -311,9 +315,11 @@ void closeRight() {
 }
 
 void moving() {
+  ROUND_A_DONE = true;
   DONE_B_WAITING = true;
   Serial.println("DONE WAITING!");
   backToMovingTimer.end();
+  state = STATE_MOVING;
 }
 
 //for debugging...
