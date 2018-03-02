@@ -52,6 +52,7 @@ Servo rightServo;
 IntervalTimer leftServoTimer;
 IntervalTimer rightServoTimer;
 IntervalTimer backToMovingTimer;
+IntervalTimer checkTimer;
 
 //state definitions
 typedef enum { 
@@ -78,7 +79,7 @@ bool DEBUG_TAPE_SENSOR = false;
 bool DEBUG_TAPE = false;
 bool DEBUG_STATE = false;
 bool USE_STATES = true;
-
+bool USE_LINE_SENSING = true;
 
 void setup() {
   Serial.begin(9600);
@@ -95,35 +96,39 @@ void setup() {
   rightServo.write(R_CLOSED);
 }
 
+
 void loop() {
   readTape();
   if (USE_STATES) {
     switch (state) { 
-    case STATE_WAITING:
+      case STATE_WAITING:
       //action
-        stopMotors();
+      stopMotors();
       //transition
       if (front_middle == LINE_BLACK) {
         //Serial.println("TRANSITION: MOVING");
         state = STATE_MOVING;
-        }
-      break;
-    case STATE_MOVING:
-      //adjustment actions
-      if (front_left == LINE_WHITE && front_right == LINE_WHITE) { 
-        Serial.println("Straight");
-        forwardMotors();
       }
-      else if (front_left == LINE_BLACK || front_left == LINE_GREY) {
-        Serial.println("Adjusting Left");
-        adjustLeft();
+      break;
+      case STATE_MOVING:
+      //adjustment actions
+      if (USE_LINE_SENSING) {
+        if (front_left == LINE_WHITE && front_right == LINE_WHITE) { 
+  //        Serial.println("Straight");
+          forwardMotors();
         }
-      else if (front_right == LINE_BLACK  || front_right == LINE_GREY) {
-        Serial.println("Adjusting Right");
-        adjustRight();        
+        else if (front_left == LINE_BLACK || front_left == LINE_GREY) {
+  //        Serial.println("Adjusting Left");
+          adjustLeft();
+        }
+        else if (front_right == LINE_BLACK  || front_right == LINE_GREY) {
+  //        Serial.println("Adjusting Right");
+          adjustRight();        
         } else { 
-          Serial.println("sadness");
-          }
+  //        Serial.println("sadness");
+        }         
+      } 
+
 
       //transition
       if (side == LINE_GREY && !ROUND_A_DONE) {
@@ -132,26 +137,19 @@ void loop() {
         //release servo
         openLeftServo();
         Serial.println("TRANSITION: BUZZWORD A");
-        backToMovingTimer.begin(movingA, 1000000);
+        backToMovingTimer.begin(movingA, 3000000);
         
         state = STATE_BUZZWORD_A;
         
       } else if (side == LINE_GREY && ROUND_A_DONE && !PATENT_OFFICE) {
-        stopMotors();
-        //release servo
-        openRightServo();
-        //transition
-        backToMovingTimer.begin(movingP, 1000000);
+        backToMovingTimer.begin(movingP, 1000000); 
+        Serial.println("TRANSITION: PATENT OFFICE");
+        state = STATE_PATENT_OFFICE;
         
-        Serial.println("TRANSITION: BUZZWORD B");
-        state = STATE_BUZZWORD_B;
-       
       } else if (side == LINE_GREY && ROUND_A_DONE && PATENT_OFFICE) {
         stopMotors();
-        //release servo
         openRightServo();
-        //transition
-        backToMovingTimer.begin(movingB, 1000000);
+        backToMovingTimer.begin(movingB, 3000000);
         
         Serial.println("TRANSITION: BUZZWORD B");
         state = STATE_BUZZWORD_B;
@@ -160,43 +158,47 @@ void loop() {
         state = STATE_TURNING;  
       }
       break;
-    case STATE_TURNING:
+      
+      case STATE_TURNING:
       //action
-        turnRightMotors();
+      turnRightMotors();
       //transition
       ROUND_A_DONE = false;
+      ROUND_B_DONE = false;
+      PATENT_OFFICE = false;
       state = STATE_WAITING;
       break;
-    case STATE_BUZZWORD_A:
-      Serial.println("waiting A...");
+      case STATE_BUZZWORD_A:
+//      Serial.println("waiting A...");
       break;
-    case STATE_PATENT_OFFICE:
-      Serial.println("waiting patent...");
+      case STATE_PATENT_OFFICE:
+//      Serial.println("waiting patent...");
       break;
-    case STATE_BUZZWORD_B:
-      Serial.println("waiting B...");
+      case STATE_BUZZWORD_B:
+//      Serial.println("waiting B...");
       break;
     }
     
-  if (DEBUG_STATE) {
-    Serial.print("state: ");
-    Serial.println(state);
-  } 
-  
-  if (DEBUG_TAPE) {
-    Serial.print("Front: ");
-    Serial.println(front_middle);
-    Serial.print("Left: ");
-    Serial.println(front_left);
-    Serial.print("Right: ");
-    Serial.println(front_right);
-    Serial.print("Side: ");
-    Serial.println(side);
-    delay(500);
+    if (DEBUG_STATE) {
+      Serial.print("state: ");
+      Serial.println(state);
+    } 
+    
+    if (DEBUG_TAPE) {
+      Serial.print("Front: ");
+      Serial.println(front_middle);
+      Serial.print("Left: ");
+      Serial.println(front_left);
+      Serial.print("Right: ");
+      Serial.println(front_right);
+      Serial.print("Side: ");
+      Serial.println(side);
+      delay(500);
     }
-  if (Serial.available()) respToKey();
   }
+    if (Serial.available()) respToKey();
 }
+
 void readTape() { 
   //reads from all tape sensors 
   int fmVal = analogRead(TAPE_READ_FRONT_MIDDLE_PIN);
@@ -320,23 +322,35 @@ void closeRight() {
 }
 
 void movingA() {
-  ROUND_A_DONE = true;
+  closeLeft();
   Serial.println("DONE WAITING A");
   backToMovingTimer.end();
-  state = STATE_MOVING;
+  forwardMotors();
+  ROUND_A_DONE = true;
+  checkTimer.begin(checkFSMAgain, 500000);
+
 }
 void movingP() {
   PATENT_OFFICE = true;
   Serial.println("DONE WAITING P");
   backToMovingTimer.end();
-  state = STATE_MOVING;
+  forwardMotors();
+  checkTimer.begin(checkFSMAgain, 500000);
 }
 void movingB() {
+  closeRight();
   ROUND_B_DONE = true;
   Serial.println("DONE WAITING B");
   backToMovingTimer.end();
-  state = STATE_MOVING;
+  forwardMotors();
+  checkTimer.begin(checkFSMAgain, 500000);
 }
+
+void checkFSMAgain(){
+  Serial.println("back to FSM");
+  state = STATE_MOVING;
+  checkTimer.end();
+  }
 
 //for debugging...
 void respToKey() {
