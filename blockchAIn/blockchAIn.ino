@@ -22,13 +22,13 @@
 
 #define L_CLOSED      90
 #define L_OPEN        180
-#define R_CLOSED      180
+#define R_CLOSED      90
 #define R_OPEN        0
 
 
 // MOTOR CONSTANTS
-#define  LEFT_MOTOR_SPEED_ON  60
-#define  RIGHT_MOTOR_SPEED_ON 60
+int  LEFT_MOTOR_SPEED_ON = 60;
+int  RIGHT_MOTOR_SPEED_ON = 60;
 
 
 int front_max = 100;
@@ -77,7 +77,8 @@ bool PATENT_OFFICE = false;
 //DEBUG FLAGS
 bool DEBUG_TAPE_SENSOR = false;
 bool DEBUG_TAPE = false;
-bool DEBUG_STATE = false;
+bool DEBUG_STATE = false; 
+
 bool USE_STATES = true;
 bool USE_LINE_SENSING = true;
 
@@ -114,25 +115,25 @@ void loop() {
       //adjustment actions
       if (USE_LINE_SENSING) {
         if (front_left == LINE_WHITE && front_right == LINE_WHITE) { 
-  //        Serial.println("Straight");
+//          Serial.println("Straight");
           forwardMotors();
         }
-        else if (front_left == LINE_BLACK || front_left == LINE_GREY) {
-  //        Serial.println("Adjusting Left");
+        else if (front_left == LINE_BLACK ) {
+//          Serial.println("Adjusting Left");
           adjustLeft();
         }
-        else if (front_right == LINE_BLACK  || front_right == LINE_GREY) {
-  //        Serial.println("Adjusting Right");
+        else if (front_right == LINE_BLACK ) {
+//          Serial.println("Adjusting Right");
           adjustRight();        
         } else { 
-  //        Serial.println("sadness");
+//          Serial.println("sadness");
         }         
       } 
 
 
       //transition
       if (side == LINE_GREY && !ROUND_A_DONE) {
-          //action
+        //action
         stopMotors();
         //release servo
         openLeftServo();
@@ -146,17 +147,19 @@ void loop() {
         Serial.println("TRANSITION: PATENT OFFICE");
         state = STATE_PATENT_OFFICE;
         
-      } else if (side == LINE_GREY && ROUND_A_DONE && PATENT_OFFICE) {
+      } else if (side == LINE_GREY && ROUND_A_DONE && PATENT_OFFICE && !ROUND_B_DONE) {
         stopMotors();
         openRightServo();
         backToMovingTimer.begin(movingB, 3000000);
         
         Serial.println("TRANSITION: BUZZWORD B");
         state = STATE_BUZZWORD_B;
-      } else if (side == LINE_BLACK && front_middle == LINE_BLACK) {
+        
+      } else if ((side == LINE_BLACK || side == LINE_GREY) && ROUND_A_DONE && ROUND_B_DONE && PATENT_OFFICE) {
         Serial.println("TRANSITION: TURNING");
         state = STATE_TURNING;  
       }
+      
       break;
       
       case STATE_TURNING:
@@ -193,7 +196,6 @@ void loop() {
       Serial.println(front_right);
       Serial.print("Side: ");
       Serial.println(side);
-      delay(500);
     }
   }
     if (Serial.available()) respToKey();
@@ -205,7 +207,6 @@ void readTape() {
   int flVal = analogRead(TAPE_READ_FRONT_LEFT_PIN);
   int frVal = analogRead(TAPE_READ_FRONT_RIGHT_PIN);
   int sVal = analogRead(TAPE_READ_SIDE_PIN);
-
   if (DEBUG_TAPE_SENSOR) { 
     Serial.print("Front value: ");
     Serial.println(fmVal);
@@ -215,7 +216,6 @@ void readTape() {
     Serial.println(frVal);
     Serial.print("Side value: ");
     Serial.println(sVal);
-    delay(500);
   } 
   if (fmVal > front_max) front_max = fmVal;
   if (flVal > left_max) left_max = flVal;
@@ -233,7 +233,6 @@ Linecolor updateTapeValues(int val, int maxVal, String which) {
   //updates the Linecolor variables accordingly
   int percent = val * 100 / maxVal;
 
-    
   if (DEBUG_TAPE_SENSOR) { 
     Serial.print(which);
     Serial.print(" val: ");
@@ -260,16 +259,16 @@ void backwardMotors() {
 }
 
 void adjustLeft() {   
-    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON+10);
+    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
     analogWrite(LMOT_OUT2, 0);
-    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
+    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON-10);
     analogWrite(RMOT_OUT2, 0);
 }
 
 void adjustRight() {   
-    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON);
+    analogWrite(LMOT_OUT1, LEFT_MOTOR_SPEED_ON-10);
     analogWrite(LMOT_OUT2, 0);
-    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON+10);
+    analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
     analogWrite(RMOT_OUT2, 0);
 }
 
@@ -292,9 +291,12 @@ void turnRightMotors() {
     analogWrite(LMOT_OUT2, LEFT_MOTOR_SPEED_ON);
     analogWrite(RMOT_OUT1, RIGHT_MOTOR_SPEED_ON);
     analogWrite(RMOT_OUT2, 0);
-    delay(1580);
+    delay(1575);
+    LEFT_MOTOR_SPEED_ON = 80;
+    RIGHT_MOTOR_SPEED_ON = 80;
+    state = STATE_MOVING;
     forwardMotors();
-    delay(5500);
+    delay(4300);
     stopMotors();
   }
 
@@ -310,13 +312,11 @@ void openRightServo(){
 }
 
 void closeLeft() {
-  Serial.println("closing left");
   leftServo.write(L_CLOSED);
   leftServoTimer.end();
 }
 
 void closeRight() {
-  Serial.println("closing right");
   rightServo.write(R_CLOSED);
   rightServoTimer.end();
 }
@@ -390,3 +390,4 @@ void respToKey() {
       break;
     }
 }
+
